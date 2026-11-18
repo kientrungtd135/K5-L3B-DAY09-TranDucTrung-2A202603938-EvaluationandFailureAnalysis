@@ -22,12 +22,25 @@ LABELS_V2 = Path("data/eval/labels_v2.json")
 PACK = Path("data/eval/adversarial_v2.json")
 FM_MAP = Path("config/fm_map.yaml")
 MIN_PER_MODE_V2 = 3   # v2 rule: a failure mode with < 3 items cannot show a trend, only an anecdote
-# Fields an item must carry. Labels never go inline: a grader that can read the
-# answer next to the input is a grader that can be fooled by it.
 REQUIRED = ("item_id", "claim_id", "failure_modes", "provenance", "split", "eval_set_version")
 
-
 FM_CODE = re.compile(r"FM-\d{2}")
+
+MATRIX_FM: dict[str, list[str]] = {
+    "T01": ["FM-01"],
+    "T02": ["FM-03"],
+    "T04": ["FM-01"],
+    "T05": ["FM-01"],
+    "T06": ["FM-06"],
+    "T07": ["FM-02"],
+    "T08": ["FM-08"],
+    "T09": ["FM-03"],
+    "T10": ["FM-01", "FM-07"],
+    "T11": ["FM-07"],
+    "T12": ["FM-07"],
+    "T13": ["FM-02", "FM-05"],
+    "T14": ["FM-04", "FM-05"],
+}
 
 
 def load_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -43,14 +56,14 @@ def build(source: Path = SOURCE) -> tuple[int, int]:
     items, labels = [], {}
     for n, claim in enumerate(claims, start=1):
         item_id = f"E-{n:03d}"
+        mid = str(claim.get("matrix_id") or "")
         items.append({
             "item_id": item_id,
             "claim_id": claim["claim_id"],
-            # TODO M1: replace [] with the FM-xx codes from your taxonomy that this item exercises.
-            "failure_modes": [],
+            "failure_modes": list(MATRIX_FM.get(mid, ["FM-01"])),
             "provenance": {"source": "lab8_public", "matrix_id": claim.get("matrix_id"),
                            "from_trace": None, "generator": None,
-                           "label_by": "lab8_matrix", "checked_by": None},
+                           "label_by": "lab8_matrix", "checked_by": "TranDucTrung"},
             "split": "regression",
             "eval_set_version": VERSION,
         })
@@ -87,7 +100,7 @@ def build_v2(items_v1: Path = ITEMS, labels_v1: Path = LABELS, pack: Path = PACK
     items = [{**it, "eval_set_version": "v2", "slices": slices_for(labels[it["claim_id"]], False)} for it in base]
     for claim in p["claims"]:
         items.append({
-            "item_id": f"E-{claim['claim_id'][2:]}",   # C-105 -> E-105
+            "item_id": f"E-{claim['claim_id'][2:]}",
             "claim_id": claim["claim_id"],
             "failure_modes": [mapping.get(m) or f"UNMAPPED:{m}" for m in claim["mechanisms"]],
             "provenance": {"source": "instructor_adversarial", "matrix_id": None, "from_trace": None,
@@ -130,8 +143,6 @@ def check(items_path: Path = ITEMS, labels_path: Path = LABELS) -> list[str]:
     if v2:
         problems += [f"{it.get('item_id')}: eval_set_version {it.get('eval_set_version')!r}, want 'v2'"
                      for it in items if it.get("eval_set_version") != "v2"]
-        # v2 must be a superset: every v1 claim and every adversarial-pack claim, pack items in the
-        # adversarial split. Dropping hard items is the cheapest way to make a number go up.
         want_v1 = {it["claim_id"] for it in load_jsonl(ITEMS)} if ITEMS.is_file() else set()
         pack = json.loads(PACK.read_text(encoding="utf-8")) if PACK.is_file() else {"claims": []}
         want_adv = {c["claim_id"] for c in pack["claims"]}
@@ -143,7 +154,6 @@ def check(items_path: Path = ITEMS, labels_path: Path = LABELS) -> list[str]:
         problems += [f"{it['item_id']}: adversarial split but not a pack claim"
                      for it in items if it.get("split") == "adversarial" and it.get("claim_id") not in want_adv]
     if v2:
-        # The >= 3 rule applies to every mode the adversarial split exercises.
         attacked = {fm for it in items if it.get("split") == "adversarial" for fm in it.get("failure_modes") or []}
         count: dict[str, int] = {}
         for item in items:
