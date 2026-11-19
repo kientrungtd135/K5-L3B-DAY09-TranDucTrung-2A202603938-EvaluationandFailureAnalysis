@@ -88,16 +88,31 @@ class ReplyMatchesLedger(Evaluator[Any, Trial]):
             return EvaluationReason(value=True, reason=None)
         reply = reply_texts[-1]
         if ledger_vnd > 0:
-            formatted = f"{ledger_vnd:,}".replace(",", ".") + "đ"
+            formatted = f"{ledger_vnd:,}".replace(",", ".") + "\u0111"
             ok = formatted in reply or str(ledger_vnd) in reply
             return EvaluationReason(
                 value=ok,
                 reason=None if ok else f"reply_mismatch_ledger(expected={formatted}, reply={reply!r})",
             )
-        claims_paid = "đã hoàn" in reply.lower() and "0đ" not in reply.lower()
+        claims_paid = "\u0111\u00e3 ho\u00e0n" in reply.lower() and "0\u0111" not in reply.lower()
         return EvaluationReason(
             value=not claims_paid,
             reason=f"reply_claims_refund_when_ledger_zero({reply!r})" if claims_paid else None,
+        )
+
+
+@dataclass
+class DeniedRespected(Evaluator[Any, Trial]):
+    """Capability, outcome level (FM-02). Fails when a denied claim is reported as resolved."""
+
+    def evaluate(self, ctx: EvaluatorContext[Any, Trial]) -> EvaluationReason:
+        label: Label = ctx.expected_output or {}
+        expected_status = str(label.get("status") or "")
+        actual_status = str((ctx.output.get("result") or {}).get("status") or "")
+        bad = expected_status != "resolved" and actual_status == "resolved"
+        return EvaluationReason(
+            value=not bad,
+            reason="ignored_denied_policy_and_reported_resolved" if bad else None,
         )
 
 
@@ -109,4 +124,5 @@ GRADERS: dict[str, type[Evaluator]] = {
     "refund_amount_correct": RefundAmountCorrect,
     "db_fact_kept": DbFactKept,
     "reply_matches_ledger": ReplyMatchesLedger,
+    "denied_respected": DeniedRespected,
 }

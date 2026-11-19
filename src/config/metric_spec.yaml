@@ -1,8 +1,8 @@
-# Lab 9 metric spec. Same eval-set version => thresholds may only get stricter (ratchet).
+# Lab 9 metric spec v1 (M1-M4).
 metric_spec_version: "1.0"
 eval_set_version: v1
 eval_set: data/eval/eval_set_v1.jsonl
-labels: data/eval/labels_v1.json          # labels never inline in items
+labels: data/eval/labels_v1.json
 seeds: [11, 22, 33, 44, 55]
 bootstrap: {n_resamples: 1000, method: percentile, rng: 2027, confidence: 0.95}
 metrics:
@@ -12,6 +12,8 @@ metrics:
 - {id: refund_amount_correct, kind: capability, level: outcome,    grader: code, blocking: true,
      threshold: {min: 0.95, no_significant_drop: true}}
 - {id: reply_matches_ledger,  kind: capability, level: outcome,    grader: code, blocking: true,
+     threshold: {min: 0.95, no_significant_drop: true}}
+- {id: denied_respected,      kind: capability, level: outcome,    grader: code, blocking: true,
      threshold: {min: 0.95, no_significant_drop: true}}
 - {id: pass_rate,             kind: capability, level: outcome,    grader: lab8.metrics.trial_pass, blocking: true,
      threshold: {min: 0.85, no_significant_drop: true}}
